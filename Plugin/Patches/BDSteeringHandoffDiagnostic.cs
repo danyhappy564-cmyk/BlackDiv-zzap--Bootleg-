@@ -11,7 +11,11 @@ namespace BlackDiv.Patches;
 // turning to face the shooter again - frozen, while clearly still alive and still taking
 // hits.
 //
-// WORKING THEORY, not yet confirmed by a raid log:
+// Mechanism below is now confirmed by reading MoreBotsAPI's own source
+// (danyhappy564-cmyk/MoreBotsAPI_Check) - see BDUnderFireSteeringFallback.cs for the fix.
+// This diagnostic is kept as-is: it still tells us, per bot per raid, whether the handoff to
+// HuntTargetLayer is actually what happened, which the fallback patch's own success is not
+// proof of by itself.
 //
 //   SAIN's SAINMoverClass.ManualUpdate only calls Bot.CurrentAction?.OnSteeringTicked() and
 //   Bot.Steering.TickPlayerSteering() - the two calls that actually turn the bot to face a

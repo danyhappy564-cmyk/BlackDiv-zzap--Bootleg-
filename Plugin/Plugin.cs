@@ -37,6 +37,7 @@ namespace BlackDiv
             if (Chainloader.PluginInfos.ContainsKey("me.sol.sain"))
             {
                 new BDSteeringHandoffDiagnostic().Enable();
+                new BDUnderFireSteeringFallback().Enable();
             }
 
             var bdEnums = new List<int> { 848420, 848421, 848422, 848423, 848424, 848426 }
