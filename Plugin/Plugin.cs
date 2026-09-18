@@ -1,4 +1,5 @@
 ﻿using BepInEx;
+using BepInEx.Bootstrap;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using BlackDiv.Patches;
@@ -30,6 +31,13 @@ namespace BlackDiv
             //new BotsControllerInitPatch().Enable();
             new BDNvgPatch().Enable();
             new SainBrainLayerPatch().Enable();
+
+            // Only touches SAIN types when SAIN is actually loaded - GetTargetMethod() would
+            // throw resolving them otherwise, and SAIN is a soft dependency for us.
+            if (Chainloader.PluginInfos.ContainsKey("me.sol.sain"))
+            {
+                new BDSteeringHandoffDiagnostic().Enable();
+            }
 
             var bdEnums = new List<int> { 848420, 848421, 848422, 848423, 848424, 848426 }
                 .ConvertAll(x => (WildSpawnType)x);
