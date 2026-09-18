@@ -35,6 +35,11 @@ namespace BlackDiv.Patches;
 //   that writing to it from another assembly (ours) is fine - it's a real field this
 //   published mod already touches this way, not a guess at BSG's obfuscated API.
 //
+//   2026-09-18 update: no longer just inferred from SAIN's own usage. Checked directly
+//   against the real Assembly-CSharp.dll (dnfile metadata dump, EFT.BotSteering type):
+//   "_lookDirection" is fdPublic, and BotOwner's "Steering" getter is mdPublic and returns
+//   this exact type. Both assumptions this patch depends on are confirmed, not inferred.
+//
 // Root cause and scope are unchanged from BDSteeringHandoffDiagnostic.cs and are now
 // confirmed (not theorized) by reading MoreBotsAPI's real source
 // (danyhappy564-cmyk/MoreBotsAPI_Check): a BD/Wedge bot that loses its SAIN GoalEnemy while
