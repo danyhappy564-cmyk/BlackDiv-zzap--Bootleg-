@@ -10,43 +10,44 @@ using UnityEngine;
 
 namespace BlackDiv.Patches;
 
-// Confirmed by reading the actual MoreBotsAPI source (danyhappy564-cmyk/MoreBotsAPI_Check)
-// after BDSteeringHandoffDiagnostic.cs was written to test this as a theory. It is no longer
-// a theory:
+// v2 - corrected after cloning SAIN's own dependencies (BigBrain, MoreBotsAPI) for reference
+// and reading SAIN's SmoothTurnPatch properly (SAIN/Patches/Shoot/AimDataPatches.cs).
 //
-//   HuntTargetLayer.IsActive() (MoreBotsAPI.Behavior.Layers.HuntTargetLayer) becomes SAIN's
-//   BigBrain competitor the moment BotHuntManager.HasHuntTarget() is true, independently of
-//   SAIN's own GoalEnemy tracking. Priority 10 loses to every SAIN combat/avoid-threat layer
-//   (62-104), so it only actually wins BigBrain's layer pick when SAIN has none active - which
-//   happens whenever SAIN has no GoalEnemy (SAIN's EnemyDecisionClass.GetDecision returns
-//   None the instant enemy == null). SelfActionDecisionClass.TryReload already documents a
-//   permanent reload failure for these bots' inventories that can drive a bot to lose its
-//   GoalEnemy while mid-retreat.
+// v1 of this fix called PlayerComponent.CharacterController.SetTargetLookDirection(...),
+// copying what SAIN's own SAINSteeringClass.TickPlayerSteering does. That call does nothing
+// useful while SAINLayersActive is false - which is exactly the state this whole bug lives
+// in. Here is why:
 //
-//   HuntTargetAction.Update (the action HuntTargetLayer runs) does
-//   "BotOwner.Steering.LookToMovingDirection(); baseSteeringLogic.Update(BotOwner);" and
-//   nothing else - no "look at whoever is shooting me" logic at all. And because BigBrain's
-//   active layer for that bot isn't a SAIN layer, SAIN.Classes.Bot.Mover.SAINMoverClass never
-//   calls its own TickPlayerSteering() for it either (gated behind
-//   "if (Bot.SAINLayersActive)"). Net effect: a BD/Wedge bot that loses its SAIN GoalEnemy
-//   while retreating freezes facing whatever direction it had, even while still taking fire.
-//   This is a direct consequence of SainBrainLayerPatch removing BD/Wedge's vanilla fallback
-//   layers (mandatory for SAIN to run on them at all, see that file's own notes) - vanilla
-//   bots would have had their own native reaction to being shot to fall back on; these don't.
+//   SAIN's SmoothTurnPatch prefixes vanilla BotSteering.Steering() - the method that
+//   actually turns the character every frame. When SAINLayersActive is true, it applies
+//   PlayerComponent.CharacterController's smoothed TurnData and blocks the original method.
+//   When SAINLayersActive is false (our case), it does the opposite: it copies vanilla's OWN
+//   BotSteering._lookDirection field INTO TurnData (bookkeeping, so SAIN doesn't jump if it
+//   regains control later) and then lets the ORIGINAL vanilla method run. So anything written
+//   to CharacterController's TurnData while SAINLayersActive is false gets silently
+//   overwritten by that same sync on the very next frame and never reaches the character -
+//   v1 compiled, ran, and did nothing visible. No raid log was needed to catch this; reading
+//   AimDataPatches.cs was enough.
 //
-// Fix, scoped to BD/Wedge roles only: postfix HuntTargetAction.Update. When the vanilla
-// "under fire" flag is set (BotOwner.Memory.IsUnderFire - the same one SAIN itself sets via
-// SAINMemoryClass.SetUnderFire) and SAIN isn't currently steering this bot, turn it to face
-// where the fire is coming from. The point and the call used here are copied from SAIN's own
-// SAINSteeringClass.LookToUnderFirePos / TickPlayerSteering - not guessed - because both are
-// public on the SAIN source in this session (SAIN-zzap--Bootleg-) and SAIN is a hard
-// dependency of this exact call path already.
+//   The field that actually drives rotation in that branch is vanilla's own
+//   BotSteering._lookDirection. SAIN's own SmoothTurnPatch itself writes to it directly
+//   ("__instance._lookDirection = ...") from SAIN's separate assembly, which is the proof
+//   that writing to it from another assembly (ours) is fine - it's a real field this
+//   published mod already touches this way, not a guess at BSG's obfuscated API.
+//
+// Root cause and scope are unchanged from BDSteeringHandoffDiagnostic.cs and are now
+// confirmed (not theorized) by reading MoreBotsAPI's real source
+// (danyhappy564-cmyk/MoreBotsAPI_Check): a BD/Wedge bot that loses its SAIN GoalEnemy while
+// retreating falls to our own HuntTargetLayer, whose HuntTargetAction has no "look at
+// whoever is shooting me" logic - it only ever calls BotOwner.Steering.LookToMovingDirection().
 internal class BDUnderFireSteeringFallback : ModulePatch
 {
     private static readonly HashSet<int> BdRoles = new HashSet<int>
     {
         848420, 848421, 848422, 848423, 848424, 848426,
     };
+
+    private static readonly HashSet<string> _reportedEngaged = new HashSet<string>();
 
     protected override MethodBase GetTargetMethod()
     {
@@ -76,13 +77,27 @@ internal class BDUnderFireSteeringFallback : ModulePatch
 
             if (bot.SAINLayersActive)
             {
-                // SAIN has this bot back this tick - let it steer, don't fight it.
+                // SAIN has this bot back this tick - let it steer through its own pipeline,
+                // don't fight it.
                 return;
             }
 
             Vector3 point = bot.Memory.UnderFireFromPosition + bot.Steering.WeaponRootOffset;
             Vector3 direction = (point - bot.Transform.WeaponRoot).normalized;
-            bot.PlayerComponent.CharacterController.SetTargetLookDirection(direction, botOwner, bot);
+
+            // Runs after HuntTargetAction.Update's own
+            // "BotOwner.Steering.LookToMovingDirection()" call, so this intentionally
+            // overrides it for this tick - the vanilla field vanilla's own
+            // BotSteering.Steering() reads when SAIN has yielded control, not SAIN's.
+            botOwner.Steering._lookDirection = direction;
+
+            // Once per bot: proof the fallback actually fired, not just that it compiled.
+            if (_reportedEngaged.Add(botOwner.ProfileId))
+            {
+                Plugin.LogSource.LogWarning(
+                    $"[BDUnderFireSteeringFallback] engaged for {botOwner.name} - forcing look direction "
+                    + "toward under-fire source while SAINLayersActive is false.");
+            }
         }
         catch (Exception e)
         {
