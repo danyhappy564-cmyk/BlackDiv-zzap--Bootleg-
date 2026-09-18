@@ -38,6 +38,8 @@ MoreBotsAPI 기반으로 Black Division 팩션을 추가하는 모드입니다.
 | `SainBrainLayerPatch` | 블디/웨지에 SAIN이 전혀 안 붙던 문제. 원작 1.3.x가 넣은 서버측 등록만으로는 안 고쳐집니다 (아래 26/09/07 항목) |
 | `SptRoot` MSBuild 속성 | 세 csproj의 `..\..\..\` 상대경로 제거 |
 | 서버 배포 경로 | `$(SptRoot)\SPT_Runtime\user\mods\` — 4.1에서 서버가 `SPT_Runtime\` 밑으로 옮겨간 것 반영 |
+| `BDSteeringHandoffDiagnostic` | 블디/웨지 봇이 SAIN 통제를 벗어나는 순간을 봇당 1회 로그로 남김 (아래 26/09/18 항목) |
+| `BDUnderFireSteeringFallback` | 도주 중 SAIN을 놓친 블디/웨지 봇이 피격당해도 안 돌아보던 문제 수정 (아래 26/09/18 항목) |
 
 ---
 
@@ -203,3 +205,74 @@ rm -rf */obj && dotnet restore BlackDiv.sln
   명시했습니다. `AssemblyName`은 둘 다 `BlackDiv` 유지 — 출력 파일명과 배포 구성은
   그대로입니다. 09/04에 "복원 쪽에서 해결할 것"이라고만 적어두고 미뤄뒀던 것을
   실제로 해결한 것입니다
+
+---
+
+<26/09/18 상세 변경점>
+
+- **블디/웨지 봇이 도주 중 엎드린 채로 피격에도 안 돌아보던 문제 수정**
+  (`BDSteeringHandoffDiagnostic`, `BDUnderFireSteeringFallback`)
+
+  증상: 블디/웨지 봇이 총격전 중 은폐 지점으로 도주 → 엎드림까지는 정상인데,
+  이후 총을 맞아도 그 방향으로 고개/몸을 안 돌림. 죽지도 않고 그냥 그 자리에
+  얼어붙은 것처럼 굳어 있음.
+
+  **원인 사슬** (SAIN 소스 직접 대조로 확인):
+
+  1. 블디/웨지 봇의 장비 구성이 바닐라 `BotReload.CanReload`가 기대하는 슬롯
+     배열과 안 맞아서, 재장전 시도할 때마다 예외가 남
+     (`SelfActionDecisionClass.TryReload`, SAIN 쪽에 이미 백오프+로그로 격리되어
+     있음 — 이건 SAIN 저장소의 기존 이력이고 이 포크에서 고친 건 아님). 결과적으로
+     그 봇은 **영원히 재장전에 성공하지 못함**.
+  2. 총알이 없으면 SAIN의 `EnemyDecisionClass`가 무조건 `Retreat` 판정 →
+     `SeekCoverAction`으로 도주+은폐(엎드림까지 여기서 일어남).
+  3. 이후 적을 놓쳐 SAIN의 `GoalEnemy`가 `null`이 되면, SAIN의 전투/위협회피
+     레이어가 전부 비활성화됨.
+  4. `SainBrainLayerPatch`가 블디/웨지용 **바닐라 폴백 레이어를 통째로 제거**해
+     놨기 때문에(SAIN을 돌리려면 필수였던 조치, 26/09/04 항목 참고), SAIN도 꺼지고
+     바닐라도 없는 상태에서 남는 건 이 포크 자체의 `HuntTargetLayer`
+     (`Plugin.cs`에 우선순위 10으로 등록)뿐.
+  5. `MoreBotsAPI_Check`(원본 소스)로 직접 확인: `HuntTargetLayer`가 미는
+     `HuntTargetAction.Update`는 `BotOwner.Steering.LookToMovingDirection()` +
+     제네릭 `LookAround`뿐이라 "쏜 사람 쪽으로 돌아보기" 로직이 아예 없음. 게다가
+     SAIN의 `SAINMoverClass.ManualUpdate`는 `Bot.SAINLayersActive`가 꺼지면 자기
+     조향 적용 코드(`TickPlayerSteering()`)를 통째로 스킵함. 결과: 봇의 시선이
+     그 순간 방향에 얼어붙고, 총을 맞아도 안 돌아봄.
+
+  이건 최근 SAIN 변경이 아니라 **이 포크가 바닐라 폴백을 없애면서 생긴 구조적
+  빈틈**입니다. 다른 SAIN 관리 봇(일반 PMC 등)은 바닐라 폴백이 남아 있어서 이
+  증상이 안 나옵니다.
+
+  **수정 1차 시도 (실패, 기록으로 남김):** `PlayerComponent.CharacterController
+  .SetTargetLookDirection(...)` — SAIN이 조향을 실제로 적용할 때 쓰는 것과 같은
+  호출을 그대로 흉내 냈으나, 이건 `Bot.SAINLayersActive == true`일 때만 의미가
+  있음. `SAIN/Patches/Shoot/AimDataPatches.cs`의 `SmoothTurnPatch`를 다시 읽어보니,
+  `SAINLayersActive == false`일 때는 오히려 **바닐라의 `_lookDirection` 값을 SAIN의
+  `TurnData`로 복사만 하고** 원본 바닐라 메서드를 그대로 실행시킴 — 즉 1차 수정이
+  써놓은 값은 매 프레임 이 동기화 로직에 그대로 덮어써져서 캐릭터한테 도달하지
+  못함. 컴파일도 되고 실행도 되지만 **눈에 보이는 효과가 전혀 없는 코드**였음.
+  실전 라이드 없이 코드만 다시 읽어서 잡음 (`SPT-BigBrain_Check`,
+  `MoreBotsAPI_Check`를 참고용으로 클론한 뒤 발견).
+
+  **수정 2차 (현재 적용본):** 실제로 회전을 결정하는 건 바닐라 `BotSteering
+  ._lookDirection` 필드 자체. SAIN 본인도 `SmoothTurnPatch`에서 이 필드에 직접
+  (`__instance._lookDirection = ...`) 쓰고 있어서, 별도 어셈블리에서 접근 가능한
+  게 이미 검증된 사실. `BDUnderFireSteeringFallback`이 블디/웨지 6종 역할에만,
+  `HuntTargetAction.Update`의 postfix로 붙어서, 바닐라 `BotOwner.Memory
+  .IsUnderFire`가 켜져 있고 SAIN이 그 틱에 조향을 안 하고 있으면(`SAINLayersActive
+  == false`) 이 필드를 직접 피격 방향으로 설정함. 사용한 지점/공식은 전부 SAIN
+  자체 소스(`SAINSteeringClass.LookToUnderFirePos`/`WeaponRootOffset`)에서 그대로
+  가져온 것 — 추측 없음.
+
+  `BDSteeringHandoffDiagnostic`은 진단 전용으로 남겨둠: 봇당 1회
+  `SAINLayersActive=false` 전이 시점의 상태(`ActiveLayer`, `GoalEnemy`, 탄약/재장전
+  상태, 피격 여부)를 로그로 남기고, `BDUnderFireSteeringFallback`도 실제로
+  발동했을 때 봇당 1회 로그를 남김. "증상이 안 보임"과 "수정이 실제로 돎"을
+  구분하기 위한 것 (1차 수정이 바로 이 구분 없이 "고친 것처럼 보였다가" 코드
+  재검토로 무효였음이 드러난 사례라 더 필요해짐).
+
+  검증: 코드 레벨로는 확정. 실전 라이드에서 `[BDUnderFireSteeringFallback]
+  engaged for ...` 로그가 찍히는지는 아직 미확인 — 다음 리포트에서 확정.
+
+  재장전 예외 자체(위 1번)는 이번에 손대지 않음. 그건 블디 로드아웃 장비 슬롯
+  데이터 문제라 별도 작업 필요.
