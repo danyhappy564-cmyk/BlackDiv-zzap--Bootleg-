@@ -40,6 +40,7 @@ MoreBotsAPI 기반으로 Black Division 팩션을 추가하는 모드입니다.
 | 서버 배포 경로 | `$(SptRoot)\SPT_Runtime\user\mods\` — 4.1에서 서버가 `SPT_Runtime\` 밑으로 옮겨간 것 반영 |
 | `BDSteeringHandoffDiagnostic` | 블디/웨지 봇이 SAIN 통제를 벗어나는 순간을 봇당 1회 로그로 남김 (아래 26/09/18 항목) |
 | `BDUnderFireSteeringFallback` | 도주 중 SAIN을 놓친 블디/웨지 봇이 피격당해도 안 돌아보던 문제 수정 (아래 26/09/18 항목) |
+| `BDIdlePatrolLayer` / `BDIdlePatrolAction` | SAIN도 사냥 대상도 둘 다 없어서 아무 레이어도 안 걸리는 봇에게 바닐라 순찰이라도 강제 (아래 26/09/19 항목) |
 
 ---
 
@@ -282,3 +283,37 @@ rm -rf */obj && dotnet restore BlackDiv.sln
   **2026-09-19 기준 해당 모드 쪽에서 수정 완료** — UIA 버전을 올리면 이 예외는
   더 이상 안 남. SAIN의 백오프/로그 자체는 다른 모드가 같은 static을 다시
   건드릴 경우를 대비해 그대로 유지.
+
+---
+
+<26/09/19 상세 변경점>
+
+- **SAIN도 사냥 대상도 둘 다 없을 때 봇이 그냥 멈춰있던 마지막 빈틈 메움**
+  (`BDIdlePatrolLayer`, `BDIdlePatrolAction`)
+
+  위 26/09/18 항목에서 다룬 흐름의 마지막 단계: SAIN이 `GoalEnemy`를 놓치고,
+  **`HuntTargetLayer`의 `BotHuntManager.HasHuntTarget()`까지 꺼지면**(사냥
+  대상이 죽었는데 대체할 살아있는 적 사이드가 더 없는 경우) 이 봇한테 걸리는
+  레이어가 하나도 없어집니다. `SainBrainLayerPatch`가 바닐라 폴백 레이어를
+  이 역할들 한정으로 이미 제거해뒀기 때문에, BigBrain은 그 틱에 활성 레이어를
+  못 찾고(`BotBaseBrainUpdatePatch`의 "no layers are active" 분기) 마지막
+  행동을 그대로 유지합니다. 크래시는 아니지만, 아무도 새 지시를 안 내리니
+  사실상 멈춘 것과 구분이 안 됩니다.
+
+  수정: `BDIdlePatrolLayer`를 우선순위 5(=`HuntTargetLayer`의 10, SAIN의
+  모든 레이어보다 아래)로 등록. 이 레이어는 그 위 레이어들이 전부 안 걸릴
+  때만 걸리는 최후의 보루라서 `IsActive()`는 생존 체크만 하고 무조건
+  `true`. 실제 행동(`BDIdlePatrolAction`)은 MoreBotsAPI의
+  `SearchForTargetAction`이 이미 하는 것과 똑같은 호출
+  (`AIActionsList.CreateNode(BotLogicDecision.simplePatrol/followerPatrol,
+  botOwner)`)로 바닐라 순찰 노드를 그대로 돌립니다 — 새로 추측한 게 아니라
+  이미 검증된 패턴을 재사용.
+
+  여기서 쓴 바닐라 멤버(`AIActionsList.CreateNode`, `AICoreNode
+  .UpdateNodeByMain`, `BotLogicDecision`의 두 필드, `BotOwner.Boss.IamBoss`,
+  `BotOwner.HealthController`)는 전부 실제 `Assembly-CSharp.dll`을
+  `dnfile`로 열어서 접근성까지 직접 확인한 뒤 작성함 — MoreBotsAPI 쪽 사용
+  예시만 보고 베낀 게 아님.
+
+  검증: 코드 레벨/멤버 접근성은 확정. 실전 라이드에서 이 상황(사냥 대상
+  전멸)이 재현되는지, 그때 봇이 실제로 순찰을 도는지는 아직 미확인.
