@@ -39,6 +39,7 @@ namespace BlackDiv
             {
                 new BDSteeringHandoffDiagnostic().Enable();
                 new BDUnderFireSteeringFallback().Enable();
+                new BDForceGigaChadPersonality().Enable();
             }
 
             var bdEnums = new List<int> { 848420, 848421, 848422, 848423, 848424, 848426 }
