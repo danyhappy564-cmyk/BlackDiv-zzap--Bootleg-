@@ -41,6 +41,7 @@ MoreBotsAPI 기반으로 Black Division 팩션을 추가하는 모드입니다.
 | `BDSteeringHandoffDiagnostic` | 블디/웨지 봇이 SAIN 통제를 벗어나는 순간을 봇당 1회 로그로 남김 (아래 26/09/18 항목) |
 | `BDUnderFireSteeringFallback` | 도주 중 SAIN을 놓친 블디/웨지 봇이 피격당해도 안 돌아보던 문제 수정 (아래 26/09/18 항목) |
 | `BDIdlePatrolLayer` / `BDIdlePatrolAction` | SAIN도 사냥 대상도 둘 다 없어서 아무 레이어도 안 걸리는 봇에게 바닐라 순찰이라도 강제 (아래 26/09/19 항목) |
+| `BDForceGigaChadPersonality` | 블디 6종 역할 전부 SAIN 성격을 GigaChad로 고정 (아래 26/09/19 항목) |
 
 ---
 
@@ -317,3 +318,24 @@ rm -rf */obj && dotnet restore BlackDiv.sln
 
   검증: 코드 레벨/멤버 접근성은 확정. 실전 라이드에서 이 상황(사냥 대상
   전멸)이 재현되는지, 그때 봇이 실제로 순찰을 도는지는 아직 미확인.
+
+- **블디 6종 역할 전부 SAIN 성격을 GigaChad로 고정** (`BDForceGigaChadPersonality`)
+
+  블랙디비전은 팩션 설정상 바닐라 기준으로도 괴물급으로 설계된 팩션인데,
+  SAIN 쪽 성격 배정은 이걸 전혀 반영하지 않고 있었습니다. `BlackDivSainRegistrations
+  .cs`는 애초에 성격을 지정하는 필드가 없고, 블디의 커스텀 WildSpawnType
+  (848420~848426)은 어떤 성격의 `AllowedTypes`에도, SAIN의 보스 성격 고정
+  딕셔너리(`PERS_BOSSES`)에도 없습니다(둘 다 바닐라 `WildSpawnType` 기준).
+  블디는 `IsPMC`도 아니라서(그건 pmcBEAR/pmcUSEC만 해당) PMC용 33% Chad
+  폴백도 못 탐. 결과적으로 `PersonalityDictionary.GetPersonality`가 끝까지
+  다 실패하고 매 스폰마다 대부분 `Normal`, 스폰당 3% 확률로만 우연히
+  GigaChad가 걸리는 상태였습니다.
+
+  수정: `SAINBotInfoClass.GetPersonality`를 postfix로 가로채서 블디 6종
+  역할이면 무조건 GigaChad로 덮어씀. 이 메서드는 봇 스폰 시점 생성자와,
+  F12로 프리셋을 실시간으로 바꿀 때 도는 `UpdatePresetSettings ->
+  ConfigureBot` 양쪽이 전부 거쳐가는 **단일 지점**이라서, 스폰 때만 걸고
+  끝나는 게 아니라 라이드 중 프리셋이 바뀌어도 GigaChad가 유지됩니다.
+
+  검증: 코드 레벨로는 확정. 실전 라이드에서 블디 봇의 활성 레이어/디버그
+  오버레이에 GigaChad 성격이 실제로 찍히는지는 아직 미확인.
