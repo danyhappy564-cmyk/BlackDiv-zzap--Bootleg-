@@ -2,6 +2,7 @@
 using BepInEx.Bootstrap;
 using BepInEx.Configuration;
 using BepInEx.Logging;
+using BlackDiv.Behavior.Layers;
 using BlackDiv.Patches;
 using System;
 using System.Collections.Generic;
@@ -56,6 +57,11 @@ namespace BlackDiv
 
             BrainManager.AddCustomLayer(typeof(HuntTargetLayer), brainList, 10, typesList);
             BrainManager.RemoveLayers(["AdvAssaultTarget"], brainList, typesList);
+
+            // Safety net: priority 5, below HuntTargetLayer (10) and every SAIN layer, so
+            // it only ever activates when neither SAIN nor HuntTargetLayer claimed the bot
+            // this tick (no GoalEnemy and no live hunt target). See BDIdlePatrolLayer.cs.
+            BrainManager.AddCustomLayer(typeof(BDIdlePatrolLayer), brainList, 5, typesList);
         }
     }
 }
