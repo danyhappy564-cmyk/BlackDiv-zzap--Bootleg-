@@ -41,7 +41,7 @@ MoreBotsAPI 기반으로 Black Division 팩션을 추가하는 모드입니다.
 | `BDSteeringHandoffDiagnostic` | 블디/웨지 봇이 SAIN 통제를 벗어나는 순간을 봇당 1회 로그로 남김 (아래 26/09/18 항목) |
 | `BDUnderFireSteeringFallback` | 도주 중 SAIN을 놓친 블디/웨지 봇이 피격당해도 안 돌아보던 문제 수정 (아래 26/09/18 항목) |
 | `BDIdlePatrolLayer` / `BDIdlePatrolAction` | SAIN도 사냥 대상도 둘 다 없어서 아무 레이어도 안 걸리는 봇에게 바닐라 순찰이라도 강제 (아래 26/09/19 항목) |
-| `BDForceGigaChadPersonality` | 블디 6종 역할 전부 SAIN 성격을 GigaChad로 고정 (아래 26/09/19 항목) |
+| `BDPersonalityOverride` + `BDPersonalityConfig` | 블디(웨지 제외 5종)/웨지 SAIN 성격을 F12에서 각각 따로 설정 가능, 기본값 GigaChad (아래 26/09/19 항목) |
 
 ---
 
@@ -319,7 +319,8 @@ rm -rf */obj && dotnet restore BlackDiv.sln
   검증: 코드 레벨/멤버 접근성은 확정. 실전 라이드에서 이 상황(사냥 대상
   전멸)이 재현되는지, 그때 봇이 실제로 순찰을 도는지는 아직 미확인.
 
-- **블디 6종 역할 전부 SAIN 성격을 GigaChad로 고정** (`BDForceGigaChadPersonality`)
+- **블디/웨지 SAIN 성격을 F12에서 따로 설정 가능하게 함, 기본값 GigaChad**
+  (`BDPersonalityOverride`, `BDPersonalityConfig`)
 
   블랙디비전은 팩션 설정상 바닐라 기준으로도 괴물급으로 설계된 팩션인데,
   SAIN 쪽 성격 배정은 이걸 전혀 반영하지 않고 있었습니다. `BlackDivSainRegistrations
@@ -331,11 +332,38 @@ rm -rf */obj && dotnet restore BlackDiv.sln
   다 실패하고 매 스폰마다 대부분 `Normal`, 스폰당 3% 확률로만 우연히
   GigaChad가 걸리는 상태였습니다.
 
-  수정: `SAINBotInfoClass.GetPersonality`를 postfix로 가로채서 블디 6종
-  역할이면 무조건 GigaChad로 덮어씀. 이 메서드는 봇 스폰 시점 생성자와,
-  F12로 프리셋을 실시간으로 바꿀 때 도는 `UpdatePresetSettings ->
-  ConfigureBot` 양쪽이 전부 거쳐가는 **단일 지점**이라서, 스폰 때만 걸고
-  끝나는 게 아니라 라이드 중 프리셋이 바뀌어도 GigaChad가 유지됩니다.
+  1차 수정은 6종 전부 GigaChad로 무조건 고정하는 것이었으나, 웨지(보스)는
+  따로 관리하고 싶다는 요청에 따라 **블디 5종(리드/어썰트/브리처/서포트/
+  레이더)과 웨지를 별도 설정으로 분리**했습니다. 분리 전에 웨지가 이미
+  특별한 AI를 갖고 있는지 먼저 확인했는데, **없었습니다** — 쇄빙선 레포의
+  `docs/BOSSWEDGE-AI-REPORT.md`에 나오는 "BossWedge"는 레테일 바닐라의
+  네이티브 보스 브레인(`ABossLogic` 파생)을 쇄빙선이 자기들 커스텀 보스
+  설계 참고용으로 디컴파일해서 정리한 문서일 뿐, 블디의 웨지와는 이름만
+  같고 완전히 무관합니다(이 레포 어디에도 `ABossLogic`을 참조하는 코드
+  없음). 지금 웨지는 나머지 5종과 똑같이 SAIN 파이프라인만 탑니다 — 분리는
+  "지금 다른 게 있어서"가 아니라 "나중에 따로 튜닝하고 싶을 때를 위해"
+  해둔 것입니다.
+
+  설정값은 BepInEx F12 메뉴 → "SAIN Personality" 섹션에 "Black Division
+  Personality"(웨지 제외 5종) / "Wedge Personality" 둘로 노출됩니다. 각각
+  기본값 GigaChad. **사용자가 SAIN 프리셋에서 그 성격 자체를 꺼뒀으면
+  (`Personality Enabled` 끄기) 강제 안 하고 원래 계산 결과를 그대로
+  둡니다** — SAIN이 원래 그 성격을 아무한테도 안 주게 확인하는 것과 같은
+  플래그(`Assignment.Enabled`)를 봅니다.
+
+  `SAINBotInfoClass.GetPersonality`를 postfix로 가로채는 방식은 그대로
+  유지 — 봇 스폰 시점 생성자와 F12 프리셋 실시간 변경(`UpdatePresetSettings
+  -> ConfigureBot`) 양쪽이 전부 거쳐가는 단일 지점이라, 라이드 중 프리셋이
+  바뀌어도 설정이 유지됩니다.
+
+  설정 바인딩(`BDPersonalityConfig.Bind`)은 `Plugin.Awake()` 안에 인라인으로
+  안 넣고 별도 클래스로 뺐습니다. Mono에서는 메서드가 처음 JIT될 때 그
+  메서드 본문의 모든 타입 토큰을 해석하려고 시도하기 때문에, `Config.Bind
+  <EPersonality>(...)`를 `Awake()` 안에 직접 써두면 그 주변에 "SAIN 있으면"
+  런타임 체크를 감싸도 소용없이 SAIN 미설치 시 `Awake()` 자체가 깨집니다.
+  이 레포의 다른 SAIN 연동 코드가 전부 별도 파일로 빠져있는 것과 같은
+  이유입니다.
 
   검증: 코드 레벨로는 확정. 실전 라이드에서 블디 봇의 활성 레이어/디버그
-  오버레이에 GigaChad 성격이 실제로 찍히는지는 아직 미확인.
+  오버레이에 설정한 성격이 실제로 찍히는지, F12 드롭다운이 정상적으로
+  뜨는지는 아직 미확인.
