@@ -27,7 +27,7 @@
 
 MoreBotsAPI 기반으로 Black Division 팩션을 추가하는 모드입니다.
 
-현재 기준: **upstream 1.3.1 / SPT 4.1**
+현재 기준: **upstream 1.3.2 / SPT 4.1**
 
 ---
 
