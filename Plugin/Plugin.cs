@@ -37,9 +37,14 @@ namespace BlackDiv
             // throw resolving them otherwise, and SAIN is a soft dependency for us.
             if (Chainloader.PluginInfos.ContainsKey("me.sol.sain"))
             {
+                // Config is BaseUnityPlugin's own ConfigFile - no SAIN type token appears in
+                // this line. BDPersonalityConfig.Bind's own body is where EPersonality gets
+                // referenced, and that method only runs from here, already behind this guard.
+                BDPersonalityConfig.Bind(Config);
+
                 new BDSteeringHandoffDiagnostic().Enable();
                 new BDUnderFireSteeringFallback().Enable();
-                new BDForceGigaChadPersonality().Enable();
+                new BDPersonalityOverride().Enable();
             }
 
             var bdEnums = new List<int> { 848420, 848421, 848422, 848423, 848424, 848426 }
