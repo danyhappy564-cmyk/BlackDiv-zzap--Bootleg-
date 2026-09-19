@@ -18,11 +18,19 @@ namespace BlackDiv.Patches;
 // So PersonalityDictionary.GetPersonality falls through to its last branch and BD bots
 // default to Normal, with only a stray 3% chance per spawn of randomly rolling GigaChad.
 //
-// Postfixing SAINBotInfoClass.GetPersonality forces GigaChad unconditionally for all six
-// BD/Wedge roles. This is the single method both the constructor and any later
-// preset-reload (F12 live tuning triggers SAINBotInfoClass.UpdatePresetSettings ->
-// ConfigureBot -> GetPersonality) funnel through, so the override survives a mid-raid
-// preset change rather than only applying at spawn and getting rolled away later.
+// Postfixing SAINBotInfoClass.GetPersonality forces GigaChad for all six BD/Wedge roles,
+// but only when the user hasn't turned GigaChad off in their own SAIN preset
+// (PersonalitySettingsClass.Assignment.Enabled). If they disabled it - same flag SAIN's
+// own PersonalityDictionary.canBotBePersonality checks before ever assigning it to
+// anyone - we back off and leave whatever GetPersonality already computed alone, so BD
+// falls back to a personality the user actually left available rather than one they
+// explicitly turned off. Forcing a personality is one thing; forcing one they disabled
+// on purpose is another.
+//
+// This is the single method both the constructor and any later preset-reload (F12 live
+// tuning triggers SAINBotInfoClass.UpdatePresetSettings -> ConfigureBot -> GetPersonality)
+// funnel through, so the override (or the deliberate non-override) survives a mid-raid
+// preset change rather than only applying at spawn.
 internal class BDForceGigaChadPersonality : ModulePatch
 {
     private static readonly HashSet<int> BdRoles = new HashSet<int>
@@ -45,7 +53,11 @@ internal class BDForceGigaChadPersonality : ModulePatch
                 return;
             }
 
-            if (SAINPlugin.LoadedPreset?.PersonalityManager?.PersonalityDictionary.TryGetValue(EPersonality.GigaChad, out var gigaChadSettings) == true)
+            if (
+                SAINPlugin.LoadedPreset?.PersonalityManager?.PersonalityDictionary.TryGetValue(EPersonality.GigaChad, out var gigaChadSettings)
+                    == true
+                && gigaChadSettings.Assignment.Enabled
+            )
             {
                 __result = EPersonality.GigaChad;
                 settings = gigaChadSettings;
