@@ -367,3 +367,33 @@ rm -rf */obj && dotnet restore BlackDiv.sln
   검증: 코드 레벨로는 확정. 실전 라이드에서 블디 봇의 활성 레이어/디버그
   오버레이에 설정한 성격이 실제로 찍히는지, F12 드롭다운이 정상적으로
   뜨는지는 아직 미확인.
+
+- **실제 `dotnet build` 검증**
+
+  지금까지의 검증은 전부 `dnfile`로 실제 dll의 멤버 시그니처를 하나하나
+  대조하는 정적 검증이었는데, 이번엔 컨테이너에 .NET SDK를 직접 깔고
+  진짜 컴파일까지 돌려봤습니다. `Prepatch.csproj`는 (Mono.Cecil을 NuGet에서
+  받고 `UnityEngine.dll` 자리에 `MonoBehaviour`만 있는 최소 스텁을 넣어서)
+  실제로 `BlackDiv.dll`이 나오는 것까지 확인했습니다. `Plugin.csproj`는
+  이 환경에 컴파일된 `SAIN.dll`이 없어서(SAIN은 소스만 있고 빌드된 바이너리가
+  없음) SAIN 타입을 직접 쓰는 4개 파일에서만 에러가 났는데, **그 에러 14개가
+  전부 "SAIN을 못 찾는다"뿐이었고, 이번에 새로 짠 나머지 코드(`Vector3` 연산,
+  `BDIdlePatrolLayer`/`BDIdlePatrolAction`, `Plugin.cs`의 `HuntManager`/
+  `BrainManager` 호출)에는 에러가 하나도 없었습니다.** 즉 SAIN 의존 부분을
+  뺀 나머지는 실제 컴파일러 기준으로 문법/API 오류가 없다는 게 확인됐습니다.
+  SAIN.dll까지 직접 빌드해서 완전한 end-to-end 검증을 하는 건 이번엔 범위
+  밖으로 남겨뒀습니다.
+
+- **쇄빙선(Icebreaker) 맵 호환성 확인 — 블디가 IceCrew 크루로 편입됨**
+
+  쇄빙선(`ManimalIcebreaker-zzap--Bootleg-`)은 `CrewBlackDivision`
+  설정(기본값 켜짐)이 켜져 있으면 자기 크루 병력으로 블디의 848426(레이더)과
+  848424(웨지)를 엔진룸/선미 구역에 직접 스폰시키고 Guard/Hold/Hunt
+  임무(`IceCrewJobs`)를 붙입니다. 이 임무가 붙은 블디 봇은 비전투 중엔
+  쇄빙선의 `IceCrewLayer`(68)/`IceHoldLayer`(105)/`IceRushLayer`(110)가
+  담당하고, 전투가 붙으면(적이 보이거나 피격당하면) 이 세 레이어가 즉시
+  물러나서 SAIN 콤뱃 레이어가 이어받습니다 — SAIN이 타겟을 놓치는 예외
+  상황에서만 이번에 고친 블디 자체 `HuntTargetLayer`(+피격시 조준 fallback)와
+  `BDIdlePatrolLayer`가 대신 받는 구조는 다른 맵과 동일합니다. 임무가 안 붙은
+  일반 스폰 블디 봇(다른 맵, 또는 `CrewBlackDivision`을 꺼둔 경우)은 IceCrew
+  레이어가 셋 다 조건 미달로 비활성이라 기존 스택 그대로 작동합니다.
