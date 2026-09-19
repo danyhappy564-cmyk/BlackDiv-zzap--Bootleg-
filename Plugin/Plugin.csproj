@@ -42,6 +42,9 @@
 		<Reference Include="SAIN">
 		  <HintPath>$(SptRoot)\BepInEx\plugins\SAIN\SAIN.dll</HintPath>
 		</Reference>
+		<Reference Include="SAIN.Preset.Shared">
+		  <HintPath>$(SptRoot)\BepInEx\plugins\SAIN\SAIN.Preset.Shared.dll</HintPath>
+		</Reference>
 		<Reference Include="spt-custom">
 		  <HintPath>$(SptRoot)\BepInEx\plugins\spt\spt-custom.dll</HintPath>
 		</Reference>
