@@ -50,6 +50,13 @@ internal class BDPersonalityOverride : ModulePatch
         848420, 848421, 848422, 848423, 848426,
     };
 
+    // The patch itself never had a success-path log - only the catch below - so there was no
+    // way to confirm from a log file whether this actually forced a personality on a real bot
+    // (2026-09-21: a real raid log had zero mentions of "GigaChad" or any BD role spawning,
+    // and that alone couldn't distinguish "no BD bot spawned this raid" from "it silently
+    // isn't working"). Logged once per bot, same pattern as BDUnderFireSteeringFallback.
+    private static readonly HashSet<string> _reportedOverridden = new HashSet<string>();
+
     protected override MethodBase GetTargetMethod()
     {
         return typeof(SAINBotInfoClass).GetMethod(nameof(SAINBotInfoClass.GetPersonality), BindingFlags.Public | BindingFlags.Instance);
@@ -89,6 +96,12 @@ internal class BDPersonalityOverride : ModulePatch
             {
                 __result = wanted.Value;
                 settings = wantedSettings;
+
+                string profileId = __instance.BotOwner?.ProfileId;
+                if (profileId != null && _reportedOverridden.Add(profileId))
+                {
+                    Plugin.LogSource.LogWarning($"[BDPersonalityOverride] forced {wanted.Value} personality for {__instance.BotOwner?.name} (WildSpawnType {wildSpawnType}).");
+                }
             }
         }
         catch (Exception e)
