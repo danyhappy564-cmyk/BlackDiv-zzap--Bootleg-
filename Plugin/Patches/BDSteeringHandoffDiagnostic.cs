@@ -24,10 +24,9 @@ namespace BlackDiv.Patches;
 //
 //   SAIN's own combat/avoid-threat layers only activate when the bot has a live GoalEnemy
 //   (SAIN's EnemyDecisionClass.GetDecision returns None the instant enemy == null). If
-//   GoalEnemy drops while a BD/Wedge bot is mid-retreat - plausible, since
-//   SelfActionDecisionClass.TryReload already has a documented, permanent failure mode for
-//   these bots' inventories (see that class's own 2026-09-15 comment: BotReload.CanReload
-//   throws walking their equipment, so they can never actually finish a reload once dry) -
+//   GoalEnemy drops while a BD/Wedge bot is mid-retreat (the original 2026-09-18 trigger was
+//   a reload exception, later traced to Use Items Anywhere 2.1.4 rather than BD's loadouts,
+//   but any retreat long enough to exceed ForgetEnemyTime does the same) -
 //   SAIN's combat layers go inactive and BigBrain falls through to whatever else is
 //   registered for the BD/Wedge roles. SainBrainLayerPatch removes the vanilla fallback
 //   layers on purpose for these roles (that removal is what lets SAIN run for them at all),
@@ -66,7 +65,11 @@ internal class BDSteeringHandoffDiagnostic : ModulePatch
                 return;
             }
 
-            if (__instance.SAINLayersActive)
+            // SAINLayersActive is also false in the ordinary no-enemy idle state, so without the
+            // under-fire gate this logged every BD bot right after spawn (a 2026-09-21 raid log:
+            // 17/17 bots, all GoalEnemy=null, UnderFire=False) and used up the once-per-bot
+            // slot before the actual bug could ever be recorded.
+            if (__instance.SAINLayersActive || botOwner.Memory?.IsUnderFire != true)
             {
                 return;
             }

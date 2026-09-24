@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace BlackDiv.Patches;
 
-// v2 - corrected after cloning SAIN's own dependencies (BigBrain, MoreBotsAPI) for reference
+// v1 -> v2 -> v3. v2 was corrected after cloning SAIN's own dependencies (BigBrain, MoreBotsAPI) for reference
 // and reading SAIN's SmoothTurnPatch properly (SAIN/Patches/Shoot/AimDataPatches.cs).
 //
 // v1 of this fix called PlayerComponent.CharacterController.SetTargetLookDirection(...),
@@ -29,16 +29,9 @@ namespace BlackDiv.Patches;
 //   v1 compiled, ran, and did nothing visible. No raid log was needed to catch this; reading
 //   AimDataPatches.cs was enough.
 //
-//   The field that actually drives rotation in that branch is vanilla's own
-//   BotSteering._lookDirection. SAIN's own SmoothTurnPatch itself writes to it directly
-//   ("__instance._lookDirection = ...") from SAIN's separate assembly, which is the proof
-//   that writing to it from another assembly (ours) is fine - it's a real field this
-//   published mod already touches this way, not a guess at BSG's obfuscated API.
-//
-//   2026-09-18 update: no longer just inferred from SAIN's own usage. Checked directly
-//   against the real Assembly-CSharp.dll (dnfile metadata dump, EFT.BotSteering type):
-//   "_lookDirection" is fdPublic, and BotOwner's "Steering" getter is mdPublic and returns
-//   this exact type. Both assumptions this patch depends on are confirmed, not inferred.
+//   So the rotation has to go through vanilla BotSteering.Steering(). v2 assumed that
+//   meant writing BotSteering._lookDirection; decompiling Steering() showed it recomputes
+//   that field from SteeringMode first, so v3 sets the mode instead - see the call site.
 //
 // Root cause and scope are unchanged from BDSteeringHandoffDiagnostic.cs and are now
 // confirmed (not theorized) by reading MoreBotsAPI's real source
@@ -88,13 +81,17 @@ internal class BDUnderFireSteeringFallback : ModulePatch
             }
 
             Vector3 point = bot.Memory.UnderFireFromPosition + bot.Steering.WeaponRootOffset;
-            Vector3 direction = (point - bot.Transform.WeaponRoot).normalized;
 
-            // Runs after HuntTargetAction.Update's own
-            // "BotOwner.Steering.LookToMovingDirection()" call, so this intentionally
-            // overrides it for this tick - the vanilla field vanilla's own
-            // BotSteering.Steering() reads when SAIN has yielded control, not SAIN's.
-            botOwner.Steering._lookDirection = direction;
+            // v3 (2026-09-24): v2 wrote BotSteering._lookDirection directly, which never
+            // turned the bot either. Decompiled BotSteering.Steering() recomputes that field
+            // from SteeringMode before applying any rotation, and HuntTargetAction.Update
+            // sets SteeringMode = ToMovingDirection every tick. In that mode Steering()
+            // overwrites _lookDirection with Mover.DirCurPoint while moving, and returns
+            // early without rotating at all while standing still. LookToPoint switches the
+            // mode to ToCustomPoint, where Steering() derives _lookDirection from our point
+            // and actually applies it. This postfix runs after HuntTargetAction.Update's
+            // LookToMovingDirection() call, so it wins for this tick.
+            botOwner.Steering.LookToPoint(point);
 
             // Once per bot: proof the fallback actually fired, not just that it compiled.
             if (_reportedEngaged.Add(botOwner.ProfileId))
