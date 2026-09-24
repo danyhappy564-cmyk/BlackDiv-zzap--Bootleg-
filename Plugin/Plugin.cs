@@ -43,6 +43,7 @@ namespace BlackDiv
                 BDPersonalityConfig.Bind(Config);
 
                 new BDSteeringHandoffDiagnostic().Enable();
+                new BDHitRevealsShooter().Enable();
                 new BDUnderFireSteeringFallback().Enable();
                 new BDPersonalityOverride().Enable();
             }

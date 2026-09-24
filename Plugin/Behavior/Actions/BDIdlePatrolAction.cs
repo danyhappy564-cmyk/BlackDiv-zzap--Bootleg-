@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using DrakiaXYZ.BigBrain.Brains;
 using EFT;
 
@@ -12,6 +13,8 @@ namespace BlackDiv.Behavior.Actions;
 // the active layer (SAIN or HuntTargetLayer reclaiming the bot).
 public class BDIdlePatrolAction : CustomLogic
 {
+    private static readonly HashSet<string> _reported = new HashSet<string>();
+
     private readonly AICoreNode baseAction;
 
     public BDIdlePatrolAction(BotOwner botOwner) : base(botOwner)
@@ -19,6 +22,13 @@ public class BDIdlePatrolAction : CustomLogic
         baseAction = botOwner.Boss.IamBoss
             ? AIActionsList.CreateNode(BotLogicDecision.simplePatrol, botOwner)
             : AIActionsList.CreateNode(BotLogicDecision.followerPatrol, botOwner);
+
+        // Once per bot: without this there was no way to tell from a raid log whether this
+        // safety net ever actually ran.
+        if (_reported.Add(botOwner.ProfileId))
+        {
+            Plugin.LogSource.LogInfo($"[BDIdlePatrol] {botOwner.name} fell through to the idle patrol layer (boss={botOwner.Boss.IamBoss}).");
+        }
     }
 
     public override void Update(CustomLayer.ActionData data)
