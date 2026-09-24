@@ -28,6 +28,15 @@
     <SptRoot Condition="'$(SptRoot)' == ''">E:\SPT 4.1</SptRoot>
   </PropertyGroup>
 
+  <!-- Game/BepInEx/SAIN assemblies are provided by the game install at runtime. Copying
+       them into bin/ made the Release zip ship Assembly-CSharp.dll, SAIN.dll, BepInEx.dll
+       and every Unity module next to BlackDiv.dll. -->
+  <ItemDefinitionGroup>
+    <Reference>
+      <Private>false</Private>
+    </Reference>
+  </ItemDefinitionGroup>
+
   <ItemGroup>
 		<Reference Include="Assembly-CSharp">
 		  <HintPath>$(SptRoot)\EscapeFromTarkov_Data\Managed\Assembly-CSharp.dll</HintPath>
