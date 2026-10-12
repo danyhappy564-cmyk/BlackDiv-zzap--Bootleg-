@@ -1,10 +1,10 @@
 ### ⚠️ IMPORTANT NOTICE / DISCLAIMER
 
-**Original Author:** TacticalToaster
-**Original Repository:** BlackDiv
-**Original Link:** https://github.com/TacticalToaster/BlackDiv
-**License:** MIT
-**This Port By:** R_F (danyhappy564-cmyk) — unofficial, AI-assisted port. Not affiliated with or endorsed by the original author.
+- **Original Author:** TacticalToaster
+- **Original Repository:** BlackDiv
+- **Original Link:** https://github.com/TacticalToaster/BlackDiv
+- **License:** MIT
+- **This Port By:** R_F (danyhappy564-cmyk) — unofficial, AI-assisted port. Not affiliated with or endorsed by the original author.
 
 1. **Reflection & Take-Downs:** I deeply reflect on the ECOT incident. As an AI-assisted "vibe coder," I will immediately delete files if the original authors ask.
 2. **No Re-Distribution:** These ported builds are unverified, temporary fixes. Please do NOT re-upload or share them anywhere else.
@@ -14,6 +14,7 @@
 
 ## 변경 이력
 
+- 2026-10-13 04:38 — README 맨 위 원작자 표기를 한 줄씩 나눠 보기 쉽게 정리 (내용 변화 없음)
 - 2026-09-24 22:12 (KST) — **"도망가서 엎드린 봇이 총 맞아도 반응 없던 버그"의
   근본 원인을 찾아서 고침.** SAIN은 적을 "눈으로 보거나 소리로 들었을 때"만 그
   적의 위치를 기억하고, **몸에 직접 총을 맞았을 때는 쏜 적을 기억하는 처리가 아예
